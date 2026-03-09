@@ -1,0 +1,59 @@
+# PLEDGE-KARMA Base Configuration
+# ================================
+# Default parameters for all system components.
+# Override via CLI or experiment-specific config files.
+
+encoder:
+  model_name: "nomic-ai/nomic-embed-text-v1.5"
+  matryoshka_dims: [64, 128, 256, 512, 768]
+  full_dim: 768
+  batch_size: 32
+  device: "cpu"
+
+knowledge_graph:
+  prerequisite_sim_threshold: 0.75
+  cross_scale_agreement_threshold: 0.60
+  min_edge_confidence: 0.65
+
+karma:
+  forgetting:
+    base_stability: 1.0
+    stability_increase_rate: 0.2
+    min_retention: 0.1
+    retrievability_threshold: 0.5
+  bkt:
+    p_init: 0.1
+    p_transit: 0.15
+    p_slip: 0.1
+    p_guess: 0.2
+    mastery_threshold: 0.95
+  metacognitive:
+    fluency_illusion_decay: 0.85
+    mrl_divergence_threshold: 0.15
+    gap_smoothing_window: 5
+
+pledge:
+  admissibility:
+    hard_constraint: false
+    confidence_threshold: 0.80
+    uncertainty_penalty: 0.3
+  depth:
+    num_levels: 3
+    depth_mismatch_penalty: 0.4
+  retrieval:
+    candidate_pool_size: 50
+    final_k: 5
+    lambda_cognitive_load: 0.3
+    lambda_reactivation: 0.4
+    diversity_weight: 0.2
+    submodular_greedy_steps: 5
+  cognitive_load:
+    novel_concept_cost: 1.0
+    dependency_depth_cost: 0.5
+    working_memory_budget: 7.0
+
+logging:
+  output_dir: "outputs"
+
+project:
+  seed: 42
