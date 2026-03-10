@@ -1,0 +1,53 @@
+{
+  "standard_rag": {
+    "pvr": 0.9345,
+    "adm": 0.0655,
+    "dca_spearman": -0.0541,
+    "auc_repeat": 0.5935,
+    "lg_pvr_r": -0.2775,
+    "lg_pvr_p": 0.0002,
+    "lg_n_students": 175,
+    "n_interactions": 52557,
+    "n_students": 200,
+    "n_repeat": 23012,
+    "pvr_40": 0.9345,
+    "pvr_50": 0.9345,
+    "pvr_60": 0.9345,
+    "pvr_70": 0.9345,
+    "pvr_80": 0.9345
+  },
+  "pledge_naive_kt": {
+    "pvr": 0.107,
+    "adm": 0.893,
+    "dca_spearman": -0.1247,
+    "auc_repeat": 0.5898,
+    "lg_pvr_r": -0.0368,
+    "lg_pvr_p": 0.6283,
+    "lg_n_students": 175,
+    "n_interactions": 52557,
+    "n_students": 200,
+    "n_repeat": 23012,
+    "pvr_40": 0.107,
+    "pvr_50": 0.107,
+    "pvr_60": 0.107,
+    "pvr_70": 0.107,
+    "pvr_80": 0.107
+  },
+  "pledge_karma_full": {
+    "pvr": 0.031,
+    "adm": 0.969,
+    "dca_spearman": -0.063,
+    "auc_repeat": 0.5906,
+    "lg_pvr_r": -0.0366,
+    "lg_pvr_p": 0.6303,
+    "lg_n_students": 175,
+    "n_interactions": 52557,
+    "n_students": 200,
+    "n_repeat": 23012,
+    "pvr_40": 0.031,
+    "pvr_50": 0.031,
+    "pvr_60": 0.031,
+    "pvr_70": 0.031,
+    "pvr_80": 0.031
+  }
+}

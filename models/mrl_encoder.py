@@ -100,8 +100,11 @@ class MRLEncoder:
             self.model.max_seq_length = self.max_seq_length
             self._model_loaded = True
         except Exception as e:
-            logger.warning(f"Could not load {self.model_name}: {e}. Using mock encoder.")
-            self._model_loaded = False
+            if not allow_mock:
+                raise ImportError(f"FATAL: MRL encoder failed... pip install sentence-transformers")
+            else:
+                logger.warning("WARNING: Using MOCK encoder — TESTING ONLY")
+                self._model_loaded = False
 
     # Physics + math concept vocabulary used for semantic mock embeddings.
     # Each term maps to a cluster index; semantically related terms share clusters.

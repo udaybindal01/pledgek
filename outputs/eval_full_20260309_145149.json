@@ -1,0 +1,221 @@
+{
+  "standard_rag": {
+    "method": "standard_rag",
+    "admissibility_rate": 0.1712,
+    "depth_accuracy": 0.0213,
+    "ndcg@10": 0.1052,
+    "mrr": 0.3418,
+    "coverage@k": 0.1052,
+    "mce": 0.9051,
+    "sim_learning_gain": -0.0116,
+    "n_samples": 20000,
+    "per_week": {
+      "0": {
+        "admissibility": 0.17350000000000002,
+        "depth_acc": 0.132,
+        "ndcg": 0.10838370724094956,
+        "learning_gain": -0.014277811991493224
+      },
+      "1": {
+        "admissibility": 0.17709999999999998,
+        "depth_acc": 0.0341,
+        "ndcg": 0.10692533897705564,
+        "learning_gain": -0.011957879434303199
+      },
+      "2": {
+        "admissibility": 0.1705,
+        "depth_acc": 0.009400000000000002,
+        "ndcg": 0.1045092684757068,
+        "learning_gain": -0.011867125121859274
+      },
+      "3": {
+        "admissibility": 0.17130000000000004,
+        "depth_acc": 0.0058000000000000005,
+        "ndcg": 0.10620412697086083,
+        "learning_gain": -0.010877872816419309
+      },
+      "4": {
+        "admissibility": 0.1683,
+        "depth_acc": 0.006200000000000001,
+        "ndcg": 0.10230256787462427,
+        "learning_gain": -0.012315288669358921
+      },
+      "5": {
+        "admissibility": 0.16870000000000002,
+        "depth_acc": 0.0102,
+        "ndcg": 0.10625805237585664,
+        "learning_gain": -0.0102711273736111
+      },
+      "6": {
+        "admissibility": 0.16630000000000003,
+        "depth_acc": 0.0034000000000000002,
+        "ndcg": 0.10124679999725304,
+        "learning_gain": -0.011077311877830936
+      },
+      "7": {
+        "admissibility": 0.169,
+        "depth_acc": 0.0051,
+        "ndcg": 0.1043998780795838,
+        "learning_gain": -0.010762849447466749
+      },
+      "8": {
+        "admissibility": 0.17240000000000005,
+        "depth_acc": 0.0032000000000000006,
+        "ndcg": 0.10446502365585647,
+        "learning_gain": -0.011379479423248844
+      },
+      "9": {
+        "admissibility": 0.17510000000000006,
+        "depth_acc": 0.0033,
+        "ndcg": 0.1075495598613016,
+        "learning_gain": -0.010761754741208954
+      }
+    }
+  },
+  "pledge_naive_kt": {
+    "method": "pledge_naive_kt",
+    "admissibility_rate": 0.0878,
+    "depth_accuracy": 0.0184,
+    "ndcg@10": 0.0521,
+    "mrr": 0.1581,
+    "coverage@k": 0.0521,
+    "mce": 0.9051,
+    "sim_learning_gain": -0.0189,
+    "n_samples": 20000,
+    "per_week": {
+      "0": {
+        "admissibility": 0.08370000000000001,
+        "depth_acc": 0.1274,
+        "ndcg": 0.0502284479355135,
+        "learning_gain": -0.02074423142865944
+      },
+      "1": {
+        "admissibility": 0.08560000000000001,
+        "depth_acc": 0.027300000000000005,
+        "ndcg": 0.04978718584126067,
+        "learning_gain": -0.018785556405287663
+      },
+      "2": {
+        "admissibility": 0.08889999999999999,
+        "depth_acc": 0.0052,
+        "ndcg": 0.05350824833566986,
+        "learning_gain": -0.018742495055135578
+      },
+      "3": {
+        "admissibility": 0.09090000000000002,
+        "depth_acc": 0.0041,
+        "ndcg": 0.05478730496897643,
+        "learning_gain": -0.018472341395018643
+      },
+      "4": {
+        "admissibility": 0.09160000000000001,
+        "depth_acc": 0.0033,
+        "ndcg": 0.05386183992129216,
+        "learning_gain": -0.018798203184273058
+      },
+      "5": {
+        "admissibility": 0.08959999999999999,
+        "depth_acc": 0.0057,
+        "ndcg": 0.053184575259695804,
+        "learning_gain": -0.018735110132391566
+      },
+      "6": {
+        "admissibility": 0.0833,
+        "depth_acc": 0.0029000000000000002,
+        "ndcg": 0.04798879503595223,
+        "learning_gain": -0.01953813338226061
+      },
+      "7": {
+        "admissibility": 0.0839,
+        "depth_acc": 0.003,
+        "ndcg": 0.05034427582422391,
+        "learning_gain": -0.018409065436217596
+      },
+      "8": {
+        "admissibility": 0.08810000000000001,
+        "depth_acc": 0.0026,
+        "ndcg": 0.05266685708410375,
+        "learning_gain": -0.018453116860051685
+      },
+      "9": {
+        "admissibility": 0.09230000000000001,
+        "depth_acc": 0.002,
+        "ndcg": 0.0542484887604466,
+        "learning_gain": -0.01845609913234449
+      }
+    }
+  },
+  "pledge_karma_full": {
+    "method": "pledge_karma_full",
+    "admissibility_rate": 0.4801,
+    "depth_accuracy": 0.0177,
+    "ndcg@10": 0.2806,
+    "mrr": 0.5722,
+    "coverage@k": 0.2806,
+    "mce": 0.905,
+    "sim_learning_gain": -0.002,
+    "n_samples": 20000,
+    "per_week": {
+      "0": {
+        "admissibility": 0.4768,
+        "depth_acc": 0.1251,
+        "ndcg": 0.2791607152467063,
+        "learning_gain": -0.007400302673680439
+      },
+      "1": {
+        "admissibility": 0.48879999999999996,
+        "depth_acc": 0.0279,
+        "ndcg": 0.28379986805628415,
+        "learning_gain": -0.002122921408695112
+      },
+      "2": {
+        "admissibility": 0.4824000000000001,
+        "depth_acc": 0.0053,
+        "ndcg": 0.2811318185883115,
+        "learning_gain": -0.0027574356410317662
+      },
+      "3": {
+        "admissibility": 0.4811000000000001,
+        "depth_acc": 0.0037000000000000006,
+        "ndcg": 0.28342574271941684,
+        "learning_gain": -0.0019144519930800942
+      },
+      "4": {
+        "admissibility": 0.4764,
+        "depth_acc": 0.0021000000000000003,
+        "ndcg": 0.28118985652819556,
+        "learning_gain": -0.0007561201301086317
+      },
+      "5": {
+        "admissibility": 0.4794,
+        "depth_acc": 0.0047,
+        "ndcg": 0.28223797074937523,
+        "learning_gain": -0.0014949136602321333
+      },
+      "6": {
+        "admissibility": 0.47350000000000003,
+        "depth_acc": 0.0023000000000000004,
+        "ndcg": 0.272316302606298,
+        "learning_gain": -0.0022741300557619177
+      },
+      "7": {
+        "admissibility": 0.47659999999999997,
+        "depth_acc": 0.0018000000000000002,
+        "ndcg": 0.27949614265674,
+        "learning_gain": -0.001354330054207869
+      },
+      "8": {
+        "admissibility": 0.4778,
+        "depth_acc": 0.0023000000000000004,
+        "ndcg": 0.2769824991442769,
+        "learning_gain": -0.0001790775302364383
+      },
+      "9": {
+        "admissibility": 0.4882,
+        "depth_acc": 0.0017,
+        "ndcg": 0.28599860330132787,
+        "learning_gain": 0.00022145417727174063
+      }
+    }
+  }
+}

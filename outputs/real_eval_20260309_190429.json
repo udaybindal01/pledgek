@@ -1,0 +1,35 @@
+{
+  "standard_rag": {
+    "admissibility_rate": 1.0,
+    "ndcg@10": 0.5407,
+    "mrr": 0.8698,
+    "auc": 0.4907,
+    "accuracy": 0.5712,
+    "mce_relative": 0.8832,
+    "baseline_acc": 0.7414,
+    "n_interactions": 10468,
+    "n_students": 50
+  },
+  "pledge_naive_kt": {
+    "admissibility_rate": 1.0,
+    "ndcg@10": 0.5407,
+    "mrr": 0.8698,
+    "auc": 0.4907,
+    "accuracy": 0.5712,
+    "mce_relative": 0.8832,
+    "baseline_acc": 0.7414,
+    "n_interactions": 10468,
+    "n_students": 50
+  },
+  "pledge_karma_full": {
+    "admissibility_rate": 1.0,
+    "ndcg@10": 0.5162,
+    "mrr": 0.8682,
+    "auc": 0.4907,
+    "accuracy": 0.5712,
+    "mce_relative": 0.8832,
+    "baseline_acc": 0.7414,
+    "n_interactions": 10468,
+    "n_students": 50
+  }
+}

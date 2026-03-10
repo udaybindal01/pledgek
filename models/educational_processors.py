@@ -462,11 +462,11 @@ class AssistmentsProcessor:
             karma_interactions.append(Interaction(
                 interaction_id=item["interaction_id"],
                 timestamp=timestamp,
-                query=f"[Assessment: {item['skill_name']}]",
+                query=item.get("question_text") or f"[Assessment: {item.get('skill_name', '')}]",
                 concept_ids=[item["concept_id"]],
                 correct=item["correct"],
                 response_quality=item["response_quality"],
-                mrl_divergence=0.0  # Not available in ASSISTments
+                mrl_divergence=float(item.get("mrl_divergence", 0.0)) # Not available in ASSISTments
             ))
 
         return karma_interactions

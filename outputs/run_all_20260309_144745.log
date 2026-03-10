@@ -1,0 +1,17 @@
+============================================================
+ PLEDGE-KARMA Full Evaluation Pipeline
+ Started: Mon Mar  9 14:47:45 IST 2026
+ Log: outputs/run_all_20260309_144745.log
+============================================================
+
+[0;34m[INFO][0m  Phase 0: Sanity checks
+[0;32m[OK][0m    Python Python 3.13.2
+[0;32m[OK][0m    sentence-transformers 5.2.3
+[0;32m[OK][0m    MRLEncoder importable
+[0;32m[OK][0m    ASSISTments data: data/processed/assistments/interactions.csv (   93536 lines)
+[0;32m[OK][0m    OpenStax concepts: data/processed/physics_v1/concepts.json (210 concepts)
+[0;32m[OK][0m    All sanity checks passed
+
+[0;34m[INFO][0m  Phase 1: Fitting BKT parameters from real ASSISTments data
+[0;34m[INFO][0m  This replaces hardcoded defaults (0.1, 0.15, 0.1, 0.2) with data-fitted values
+/opt/homebrew/Cellar/python@3.13/3.13.2/Frameworks/Python.framework/Versions/3.13/Resources/Python.app/Contents/MacOS/Python: can't open file '/Users/udaybindal/Desktop/AoLM/pledge_karma/scripts/fit_bkt_params.py': [Errno 2] No such file or directory

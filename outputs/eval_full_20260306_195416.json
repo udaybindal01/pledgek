@@ -1,0 +1,38 @@
+{
+  "standard_rag": {
+    "method": "standard_rag",
+    "admissibility_rate": NaN,
+    "depth_accuracy": NaN,
+    "ndcg@10": NaN,
+    "mrr": NaN,
+    "coverage@k": NaN,
+    "mce": 0.1359,
+    "sim_learning_gain": NaN,
+    "n_samples": 0,
+    "per_week": {}
+  },
+  "pledge_naive_kt": {
+    "method": "pledge_naive_kt",
+    "admissibility_rate": NaN,
+    "depth_accuracy": NaN,
+    "ndcg@10": NaN,
+    "mrr": NaN,
+    "coverage@k": NaN,
+    "mce": 0.1359,
+    "sim_learning_gain": NaN,
+    "n_samples": 0,
+    "per_week": {}
+  },
+  "pledge_karma_full": {
+    "method": "pledge_karma_full",
+    "admissibility_rate": NaN,
+    "depth_accuracy": NaN,
+    "ndcg@10": NaN,
+    "mrr": NaN,
+    "coverage@k": NaN,
+    "mce": 0.1359,
+    "sim_learning_gain": NaN,
+    "n_samples": 0,
+    "per_week": {}
+  }
+}

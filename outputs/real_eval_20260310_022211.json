@@ -1,0 +1,29 @@
+{
+  "standard_rag": {
+    "pvr": 0.9159,
+    "adm": 0.0841,
+    "dca_spearman": 0.0225,
+    "auc_repeat": 0.5573,
+    "n_interactions": 10468,
+    "n_students": 50,
+    "n_repeat": 7453
+  },
+  "pledge_naive_kt": {
+    "pvr": 0.1325,
+    "adm": 0.8675,
+    "dca_spearman": 0.0,
+    "auc_repeat": 0.5513,
+    "n_interactions": 10468,
+    "n_students": 50,
+    "n_repeat": 7453
+  },
+  "pledge_karma_full": {
+    "pvr": 0.4376,
+    "adm": 0.5624,
+    "dca_spearman": 0.0708,
+    "auc_repeat": 0.5529,
+    "n_interactions": 10468,
+    "n_students": 50,
+    "n_repeat": 7453
+  }
+}

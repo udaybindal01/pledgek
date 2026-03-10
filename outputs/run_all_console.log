@@ -1,0 +1,10 @@
+============================================================
+ PLEDGE-KARMA Full Evaluation Pipeline
+ Started: Mon Mar  9 14:49:43 IST 2026
+ Log: outputs/run_all_20260309_144943.log
+============================================================
+
+[0;34m[INFO][0m  Phase 0: Sanity checks
+[0;32m[OK][0m    Python Python 3.13.2
+[0;31m[ERROR][0m sentence-transformers not installed.
+[0;31m[ERROR][0m Run: pip install sentence-transformers

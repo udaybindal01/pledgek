@@ -4,25 +4,32 @@ PLEDGE-KARMA Data Preparation Script
 =======================================
 Downloads and processes all datasets needed for the research.
 
+Three-Axis Evaluation Strategy (Strategy B + Strategy C):
+  Axis 1 — Prereq Graph Quality:
+      LectureBank (CS/NLP human labels)  +  OpenStax multi-subject corpus
+  Axis 2 — KT / Forgetting:
+      EdNet (preferred, 131M interactions, real timestamps + concept tags)
+      ASSISTments (fallback, with MRL injection via ConceptAligner)
+  Axis 3 — End-to-End Pedagogical Retrieval:
+      MOOCCube (prereq graph + student logs in same domain)
+
 Usage:
-    # Quick mode: first 5 OpenStax chapters + first 50K ASSISTments rows
+    # Quick mode: first 5 OpenStax chapters + 50K ASSISTments rows
     python data/prepare_data.py --mode quick
 
     # Full mode: all available data
     python data/prepare_data.py --mode full
 
-    # Single dataset
-    python data/prepare_data.py --only openstax
+    # Specific datasets
+    python data/prepare_data.py --only openstax        # full multi-subject corpus
     python data/prepare_data.py --only lecturebank
-    python data/prepare_data.py --only assistments
+    python data/prepare_data.py --only assistments     # with MRL injection
+    python data/prepare_data.py --only ednet           # preferred KT dataset
+    python data/prepare_data.py --only mooccube
     python data/prepare_data.py --only junyi
 
-Datasets:
-    OpenStax Physics  — textbook corpus (free API, CC-BY)
-    LectureBank       — prerequisite graph ground truth (GitHub)
-    ASSISTments 2012  — student interaction logs (public CSV)
-    Junyi Academy     — temporal interactions (Kaggle)
-    MOOCCube          — prereq graph + student logs (simulated fallback)
+    # EdNet with simulated data (no download required)
+    python data/prepare_data.py --only ednet --ednet-simulate
 """
 
 import os
@@ -41,17 +48,30 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 logger = logging.getLogger(__name__)
 
-RAW_DIR = Path("data/raw")
+RAW_DIR       = Path("data/raw")
 PROCESSED_DIR = Path("data/processed")
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 1. OpenStax
+# 1. OpenStax  — Multi-subject corpus (Axis 1: prereq graph + retrieval target)
 # ═════════════════════════════════════════════════════════════════════════════
-def prepare_openstax(max_chapters: Optional[int] = None):
-    """Download and process OpenStax dataset from HuggingFace."""
+
+def prepare_openstax(max_chapters: Optional[int] = None, multi_subject: bool = True):
+    """
+    Download and process OpenStax dataset from HuggingFace.
+
+    In full mode, processes ALL subjects (physics, chemistry, calculus,
+    biology, statistics) to give the prereq graph a multi-domain corpus.
+    This is the Axis 1 corpus for prereq graph evaluation.
+
+    In quick mode, processes physics only (1 book).
+    """
     logger.info("=" * 60)
     logger.info("OPENSTAX: Downloading HuggingFaceTB/openstax_paragraphs...")
+    if multi_subject and max_chapters is None:
+        logger.info("  Mode: FULL multi-subject corpus (all subjects)")
+    else:
+        logger.info("  Mode: quick (physics only)")
     logger.info("=" * 60)
 
     from data.pipelines.hf_openstax_pipeline import HFOpenStaxPipeline
@@ -59,79 +79,130 @@ def prepare_openstax(max_chapters: Optional[int] = None):
     pipeline = HFOpenStaxPipeline(output_dir=str(PROCESSED_DIR))
 
     try:
-        # Quick mode limits to 1 book, Full mode processes the entire corpus
-        max_books = 1 if max_chapters is not None else None
-        book_filter = "physics" if max_chapters is not None else ""
-        concepts, chunks = pipeline.process_dataset(max_books=max_books, book_name_filter=book_filter)
-        pipeline.save_processed("openstax_full")
+        if max_chapters is not None:
+            # Quick mode: physics only, 1 book
+            concepts, chunks = pipeline.process_dataset(
+                max_books=1, book_name_filter="physics"
+            )
+            pipeline.save_processed("openstax_full")
+        else:
+            # Full mode: all subjects, no book filter
+            concepts, chunks = pipeline.process_dataset(
+                max_books=None, book_name_filter=""
+            )
+            pipeline.save_processed("openstax_full")
+
         logger.info(f"✓ OpenStax (HF): {len(concepts)} concepts, {len(chunks)} chunks")
+
+        # Log subject distribution for paper reporting
+        from collections import Counter
+        subject_counts = Counter(c.subject for c in concepts)
+        logger.info("  Subject distribution:")
+        for subj, count in sorted(subject_counts.items(), key=lambda x: -x[1]):
+            logger.info(f"    {subj:<20}: {count} concepts")
+
         return True
+
     except Exception as e:
         logger.error(f"  OpenStax download failed: {e}")
-        logger.info("  Creating simulated OpenStax corpus for testing...")
-        _create_simulated_openstax()
+        logger.info("  Creating simulated multi-subject OpenStax corpus for testing...")
+        _create_simulated_openstax_multisubject()
         return True
 
 
-def _create_simulated_openstax():
-    """Create simulated OpenStax corpus using the experiment runner's mock builder."""
+def _create_simulated_openstax_multisubject():
+    """
+    Create simulated multi-subject OpenStax corpus.
+    Covers physics, calculus, chemistry, and CS to test cross-subject
+    prereq alignment with LectureBank.
+    """
     from experiments.run_experiment import build_mock_corpus
-    concepts_obj, chunks_obj = build_mock_corpus(n_concepts=50, n_chunks=200)
-    
+
     out_dir = PROCESSED_DIR / "openstax_full"
     out_dir.mkdir(parents=True, exist_ok=True)
-    
-    concepts = []
-    for c in concepts_obj:
-        concepts.append({
-            "concept_id": c.concept_id,
-            "name": c.name,
-            "description": c.description,
-            "depth_level": c.depth_level,
-            "chapter_order": c.chapter_order,
-            "subject": c.subject,
-            "tags": c.tags,
+
+    # Build per-subject mocks and merge
+    all_concepts = []
+    all_chunks   = []
+
+    subjects = [
+        ("physics",   30, 100),
+        ("calculus",  20,  80),
+        ("chemistry", 20,  80),
+        ("cs",        15,  60),   # Overlaps with LectureBank CS concepts
+    ]
+
+    for subject, n_concepts, n_chunks in subjects:
+        concepts_obj, chunks_obj = build_mock_corpus(
+            n_concepts=n_concepts, n_chunks=n_chunks
+        )
+        # Tag with subject
+        for c in concepts_obj:
+            c.subject = subject
+            c.tags    = ["openstax", subject]
+        for ch in chunks_obj:
+            ch.subject = subject
+            ch.source  = f"openstax_{subject}"
+
+        all_concepts.extend(concepts_obj)
+        all_chunks.extend(chunks_obj)
+
+    concepts_list = []
+    for c in all_concepts:
+        concepts_list.append({
+            "concept_id":      c.concept_id,
+            "name":            c.name,
+            "description":     c.description,
+            "depth_level":     c.depth_level,
+            "chapter_order":   c.chapter_order,
+            "subject":         c.subject,
+            "tags":            c.tags,
             "source_chunk_ids": c.source_chunk_ids,
         })
-        
-    chunks = []
-    for c in chunks_obj:
-        chunks.append({
-            "chunk_id": c.chunk_id,
-            "text": c.text,
-            "concept_ids": c.concept_ids,
-            "prerequisite_concept_ids": c.prerequisite_concept_ids,
-            "depth_level": c.depth_level,
-            "chapter_order": c.chapter_order,
-            "subject": c.subject,
-            "source": c.source,
-            "metadata": c.metadata,
+
+    chunks_list = []
+    for ch in all_chunks:
+        chunks_list.append({
+            "chunk_id":                 ch.chunk_id,
+            "text":                     ch.text,
+            "concept_ids":              ch.concept_ids,
+            "prerequisite_concept_ids": ch.prerequisite_concept_ids,
+            "depth_level":              ch.depth_level,
+            "chapter_order":            ch.chapter_order,
+            "subject":                  ch.subject,
+            "source":                   ch.source,
+            "metadata":                 ch.metadata,
         })
-        
+
     with open(out_dir / "concepts.json", "w") as f:
-        json.dump(concepts, f, indent=2)
+        json.dump(concepts_list, f, indent=2)
     with open(out_dir / "chunks.json", "w") as f:
-        json.dump(chunks, f, indent=2)
-        
-    logger.info(f"  ✓ Simulated OpenStax: {len(concepts)} concepts, {len(chunks)} chunks")
+        json.dump(chunks_list, f, indent=2)
+
+    logger.info(
+        f"  ✓ Simulated multi-subject OpenStax: "
+        f"{len(concepts_list)} concepts, {len(chunks_list)} chunks "
+        f"across {len(subjects)} subjects"
+    )
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 2. LectureBank
+# 2. LectureBank  — Prereq graph ground truth (Axis 1)
 # ═════════════════════════════════════════════════════════════════════════════
+
 LECTUREBANK_REPO = "https://github.com/Yale-LILY/LectureBank.git"
+
 
 def prepare_lecturebank():
     """Clone LectureBank repo and extract prerequisite labels."""
     logger.info("=" * 60)
-    logger.info("LECTUREBANK: Cloning prerequisite graph data...")
+    logger.info("LECTUREBANK: Cloning prerequisite graph data (Axis 1)...")
     logger.info("=" * 60)
 
     lb_raw = RAW_DIR / "lecturebank"
     lb_out = PROCESSED_DIR / "lecturebank"
     lb_out.mkdir(parents=True, exist_ok=True)
 
-    # Clone if not already present
     if not (lb_raw / ".git").exists():
         lb_raw.mkdir(parents=True, exist_ok=True)
         try:
@@ -148,95 +219,148 @@ def prepare_lecturebank():
     else:
         logger.info("  LectureBank already cloned")
 
-    # Find and process prerequisite files
-    prereq_edges = []
-    concept_set = set()
+    # Search for prerequisite annotation files
+    prereq_files = list(lb_raw.rglob("*.txt"))
+    concept_files = list(lb_raw.rglob("*concept*"))
 
-    # LectureBank stores prereqs in various TSV files
-    for tsv in lb_raw.rglob("*.tsv"):
-        try:
-            with open(tsv, encoding="utf-8") as f:
-                reader = csv.reader(f, delimiter="\t")
-                for row in reader:
-                    if len(row) >= 3:
-                        src, tgt, label = row[0].strip(), row[1].strip(), row[2].strip()
-                        if label in ("1", "True", "true"):
-                            src_id = f"lb_{hashlib.md5(src.encode()).hexdigest()[:10]}"
-                            tgt_id = f"lb_{hashlib.md5(tgt.encode()).hexdigest()[:10]}"
+    prereq_edges = []
+    concepts_found = set()
+
+    for pf in prereq_files:
+        if "prereq" in pf.name.lower() or "prerequisite" in pf.name.lower():
+            with open(pf, errors="ignore") as f:
+                for line in f:
+                    parts = line.strip().split("\t")
+                    if len(parts) >= 3:
+                        concept_a, concept_b, label = parts[0], parts[1], parts[2]
+                        concepts_found.update([concept_a, concept_b])
+                        if label.strip() == "1":
+                            cid_a = hashlib.md5(concept_a.encode()).hexdigest()[:12]
+                            cid_b = hashlib.md5(concept_b.encode()).hexdigest()[:12]
                             prereq_edges.append({
-                                "source_id": src_id,
-                                "target_id": tgt_id,
-                                "source_name": src,
-                                "target_name": tgt,
-                                "confidence": 0.95,
-                                "source": "lecturebank",
+                                "source_id":   f"lb_{cid_a}",
+                                "target_id":   f"lb_{cid_b}",
+                                "source_name": concept_a,
+                                "target_name": concept_b,
+                                "confidence":  0.9,
+                                "source":      "lecturebank_human",
                             })
-                            concept_set.add(src)
-                            concept_set.add(tgt)
-        except Exception:
-            continue
 
     if not prereq_edges:
-        logger.info("  No labeled TSV files found, using simulated data")
+        logger.warning("  No prereq edges found in LectureBank files.")
+        logger.info("  Using simulated LectureBank data instead.")
         _create_simulated_lecturebank(lb_out)
         return True
 
-    # Save processed edges
     with open(lb_out / "prereq_edges.json", "w") as f:
         json.dump(prereq_edges, f, indent=2)
 
-    # Save concept list
-    concepts = [
-        {"concept_id": f"lb_{hashlib.md5(c.encode()).hexdigest()[:10]}",
-         "name": c, "source": "lecturebank"}
-        for c in sorted(concept_set)
+    # Save concept list for cross-dataset alignment
+    concept_list = [
+        {
+            "concept_id": f"lb_{hashlib.md5(c.encode()).hexdigest()[:12]}",
+            "name": c,
+            "dataset": "lecturebank",
+            "subject": "cs_nlp",
+        }
+        for c in sorted(concepts_found)
     ]
     with open(lb_out / "concepts.json", "w") as f:
-        json.dump(concepts, f, indent=2)
+        json.dump(concept_list, f, indent=2)
 
-    logger.info(f"✓ LectureBank: {len(prereq_edges)} edges, {len(concept_set)} concepts")
+    logger.info(
+        f"✓ LectureBank: {len(prereq_edges)} prereq edges, "
+        f"{len(concepts_found)} concepts"
+    )
     return True
 
 
 def _create_simulated_lecturebank(lb_out: Path):
-    """Create simulated LectureBank data using the existing loader's simulate method."""
-    from data.pipelines.prereq_graph_pipeline import LectureBankLoader
+    """Simulated LectureBank with CS + NLP concepts (two chains)."""
+    lb_out.mkdir(parents=True, exist_ok=True)
 
-    loader = LectureBankLoader("__nonexistent__")
-    dataset = loader.load()  # Falls back to simulated data
+    concept_names = [
+        "variables", "data types", "control flow", "functions", "recursion",
+        "arrays", "linked lists", "trees", "graphs", "sorting",
+        "dynamic programming", "gradient descent", "backpropagation",
+        "neural networks", "word embeddings", "attention", "transformers",
+        "language models",
+    ]
+    prereq_pairs = [
+        ("variables", "data types"), ("data types", "control flow"),
+        ("control flow", "functions"), ("functions", "recursion"),
+        ("arrays", "sorting"), ("arrays", "linked lists"),
+        ("linked lists", "trees"), ("trees", "graphs"),
+        ("sorting", "dynamic programming"),
+        ("gradient descent", "backpropagation"),
+        ("backpropagation", "neural networks"),
+        ("word embeddings", "attention"), ("attention", "transformers"),
+        ("transformers", "language models"),
+    ]
+    neg_pairs = [
+        ("recursion", "transformers"), ("sorting", "attention"),
+        ("variables", "language models"), ("linked lists", "gradient descent"),
+        ("arrays", "transformers"),
+    ]
 
-    edges = [e.to_dict() for e in dataset.positive_edges]
+    def cid(name):
+        return f"lb_{hashlib.md5(name.encode()).hexdigest()[:12]}"
+
+    prereq_edges = [
+        {
+            "source_id":   cid(a), "target_id":   cid(b),
+            "source_name": a,       "target_name": b,
+            "confidence":  0.9,     "source":      "lb_simulated_human",
+        }
+        for a, b in prereq_pairs
+    ]
     with open(lb_out / "prereq_edges.json", "w") as f:
-        json.dump(edges, f, indent=2)
+        json.dump(prereq_edges, f, indent=2)
 
-    concepts = [
-        {"concept_id": cid, "name": name, "source": "lb_simulated"}
-        for name, cid in dataset.concept_map.items()
+    concept_list = [
+        {"concept_id": cid(n), "name": n, "dataset": "lecturebank", "subject": "cs_nlp"}
+        for n in concept_names
     ]
     with open(lb_out / "concepts.json", "w") as f:
-        json.dump(concepts, f, indent=2)
+        json.dump(concept_list, f, indent=2)
 
-    logger.info(f"  ✓ Simulated LectureBank: {len(edges)} edges, {len(concepts)} concepts")
+    # Save negative pairs for evaluation (important for precision/recall)
+    neg_pairs_list = [
+        {"source_id": cid(a), "target_id": cid(b), "label": 0}
+        for a, b in neg_pairs
+    ]
+    with open(lb_out / "negative_pairs.json", "w") as f:
+        json.dump(neg_pairs_list, f, indent=2)
+
+    logger.info(
+        f"  ✓ Simulated LectureBank: {len(prereq_edges)} prereq edges, "
+        f"{len(concept_list)} concepts"
+    )
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 3. ASSISTments
+# 3. ASSISTments  — KT fallback (Axis 2, with MRL injection)
 # ═════════════════════════════════════════════════════════════════════════════
-ASSISTMENTS_URL = (
-    "https://sites.google.com/site/assistmaborern/"
-    # The direct download URL for ASSISTments skill-builder data (2009-2010)
-)
-# Using the 2009-2010 skill-builder dataset which is smaller and easier to download
+
 ASSISTMENTS_DIRECT_URL = (
     "https://raw.githubusercontent.com/hcnoh/knowledge-tracing-collection-tensorflow2.0/"
     "master/data/assistments09/data.csv"
 )
 
 
-def prepare_assistments(max_rows: Optional[int] = None):
-    """Download and process ASSISTments dataset."""
+def prepare_assistments(max_rows: Optional[int] = None, inject_mrl: bool = False):
+    """
+    Download and process ASSISTments dataset.
+
+    ASSISTments is Axis 2 FALLBACK for KT/forgetting evaluation when EdNet
+    is not available. Use EdNet when possible (real timestamps + MRL divergence).
+
+    inject_mrl: If True, retroactively compute MRL divergence from skill name
+                templates using the ConceptAligner (Strategy C). Requires
+                sentence-transformers to be installed.
+    """
     logger.info("=" * 60)
-    logger.info("ASSISTMENTS: Downloading student interaction data...")
+    logger.info("ASSISTMENTS: Downloading student interaction data (Axis 2 fallback)...")
     logger.info("=" * 60)
 
     assist_raw = RAW_DIR / "assistments"
@@ -246,7 +370,6 @@ def prepare_assistments(max_rows: Optional[int] = None):
 
     csv_path = assist_raw / "data.csv"
 
-    # Download if not present
     if not csv_path.exists():
         try:
             import requests
@@ -263,7 +386,6 @@ def prepare_assistments(max_rows: Optional[int] = None):
     else:
         logger.info("  ASSISTments data already downloaded")
 
-    # Process the CSV
     interactions = []
     skills = set()
     students = set()
@@ -276,9 +398,7 @@ def prepare_assistments(max_rows: Optional[int] = None):
             if max_rows and row_count > max_rows:
                 break
 
-            # The KT collection format has columns:
-            # user_id, skill_id/skill_name, correct, ...
-            uid = row.get("user_id", row.get("student_id", "")).strip()
+            uid   = row.get("user_id",    row.get("student_id", "")).strip()
             skill = row.get("skill_name", row.get("skill_id",
                     row.get("skill", ""))).strip()
             correct = row.get("correct", "0").strip()
@@ -290,25 +410,28 @@ def prepare_assistments(max_rows: Optional[int] = None):
             skills.add(skill)
 
             interactions.append({
-                "user_id": uid,
-                "skill_name": skill,
-                "correct": correct,
-                "hint_count": row.get("hint_count", "0"),
+                "user_id":       uid,
+                "skill_name":    skill,
+                "correct":       correct,
+                "hint_count":    row.get("hint_count",    "0"),
                 "attempt_count": row.get("attempt_count", "1"),
-                "timestamp": row.get("start_time",
-                             row.get("timestamp", "")),
+                "timestamp":     row.get("start_time",
+                                 row.get("timestamp", "")),
+                "mrl_divergence": 0.0,   # Filled by inject_mrl step if enabled
             })
 
-    # Save processed interactions
     fieldnames = ["user_id", "skill_name", "correct", "hint_count",
-                  "attempt_count", "timestamp"]
-    with open(assist_out / "interactions.csv", "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in interactions:
-            writer.writerow(row)
+                  "attempt_count", "timestamp", "mrl_divergence"]
 
-    # Save skill mapping
+    # Strategy C: retroactively inject MRL divergence from skill names
+    if inject_mrl and interactions:
+        interactions = _inject_mrl_into_assistments(interactions, assist_out)
+
+    with open(assist_out / "interactions.csv", "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(interactions)
+
     skill_mapping = {
         skill: f"assist_{hashlib.md5(skill.encode()).hexdigest()[:10]}"
         for skill in sorted(skills)
@@ -316,11 +439,67 @@ def prepare_assistments(max_rows: Optional[int] = None):
     with open(assist_out / "skill_mapping.json", "w") as f:
         json.dump(skill_mapping, f, indent=2)
 
+    mrl_coverage = sum(1 for i in interactions if i.get("mrl_divergence", 0.0) != 0.0)
     logger.info(
         f"✓ ASSISTments: {len(interactions)} interactions, "
-        f"{len(students)} students, {len(skills)} skills"
+        f"{len(students)} students, {len(skills)} skills, "
+        f"MRL coverage: {mrl_coverage}/{len(interactions)}"
     )
     return True
+
+
+def _inject_mrl_into_assistments(
+    interactions: List[Dict],
+    assist_out: Path,
+) -> List[Dict]:
+    """
+    Strategy C: Inject real MRL divergence into ASSISTments interactions.
+
+    Maps skill_name → query template → MRL divergence vs corpus chunks.
+    Requires sentence-transformers. Falls back to heuristic if unavailable.
+    """
+    logger.info("  Strategy C: Injecting MRL divergence into ASSISTments...")
+
+    # Load corpus chunks for divergence computation
+    corpus_chunks = []
+    for corpus_path in [
+        PROCESSED_DIR / "openstax_full" / "chunks.json",
+        PROCESSED_DIR / "physics_v1"   / "chunks.json",
+    ]:
+        if corpus_path.exists():
+            with open(corpus_path) as f:
+                corpus_chunks = json.load(f)
+            logger.info(f"  Using corpus: {corpus_path} ({len(corpus_chunks)} chunks)")
+            break
+
+    if not corpus_chunks:
+        logger.warning("  No corpus found for MRL injection — using heuristic fallback")
+
+    try:
+        from models.mrl_encoder import MRLEncoder
+        from data.pipelines.concept_alignment import ConceptAligner
+
+        encoder = MRLEncoder({
+            "model_name":           "nomic-ai/nomic-embed-text-v1.5",
+            "matryoshka_dims":      [64, 128, 256, 512, 768],
+            "full_dim":             768,
+            "normalize_embeddings": True,
+            "trust_remote_code":    True,
+        })
+
+        if not encoder._model_loaded:
+            raise ImportError("sentence-transformers not installed")
+
+        aligner = ConceptAligner(encoder=encoder)
+        updated = aligner.inject_mrl_into_assistments(interactions, corpus_chunks)
+        logger.info("  ✓ Real MRL divergence injected via ConceptAligner")
+        return updated
+
+    except (ImportError, Exception) as e:
+        logger.warning(f"  MRL injection failed ({e}), using heuristic proxy")
+        from data.pipelines.concept_alignment import ConceptAligner
+        aligner = ConceptAligner(encoder=None)
+        return aligner._heuristic_mrl_injection(interactions)
 
 
 def _create_simulated_assistments(assist_out: Path):
@@ -341,21 +520,24 @@ def _create_simulated_assistments(assist_out: Path):
     interactions = []
     for student in range(200):
         ability = rng.uniform(0.3, 0.9)
-        n_ints = rng.randint(20, 100)
+        n_ints  = rng.randint(20, 100)
         for j in range(n_ints):
-            skill = rng.choice(skills)
+            skill   = rng.choice(skills)
             correct = "1" if rng.random() < ability else "0"
+            # Heuristic MRL divergence: anti-correlates with correctness
+            mrl = round(float(rng.beta(2, 5)) * (0.15 if correct == "0" else 0.05), 4)
             interactions.append({
-                "user_id": f"sim_student_{student}",
-                "skill_name": skill,
-                "correct": correct,
-                "hint_count": str(rng.randint(0, 3)),
+                "user_id":       f"sim_student_{student}",
+                "skill_name":    skill,
+                "correct":       correct,
+                "hint_count":    str(rng.randint(0, 3)),
                 "attempt_count": str(rng.randint(1, 4)),
-                "timestamp": "",
+                "timestamp":     "",
+                "mrl_divergence": mrl,
             })
 
     fieldnames = ["user_id", "skill_name", "correct", "hint_count",
-                  "attempt_count", "timestamp"]
+                  "attempt_count", "timestamp", "mrl_divergence"]
     with open(assist_out / "interactions.csv", "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
@@ -364,165 +546,338 @@ def _create_simulated_assistments(assist_out: Path):
     with open(assist_out / "skill_mapping.json", "w") as f:
         json.dump(skill_mapping, f, indent=2)
 
-    logger.info(f"  ✓ Simulated ASSISTments: {len(interactions)} interactions")
+    logger.info(f"  ✓ Simulated ASSISTments: {len(interactions)} interactions "
+                f"(with heuristic MRL divergence)")
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 4. Junyi Academy
+# 4. EdNet  — KT / forgetting evaluation (Axis 2, PRIMARY)
 # ═════════════════════════════════════════════════════════════════════════════
+
+def prepare_ednet(
+    max_students: Optional[int] = None,
+    simulate: bool = False,
+    compute_mrl: bool = False,
+):
+    """
+    Process EdNet dataset for KT/forgetting evaluation (Axis 2 PRIMARY).
+
+    EdNet is PREFERRED over ASSISTments because:
+      - Real timestamps → true Ebbinghaus forgetting evaluation
+      - Concept tags → concept-level BKT without proxy mapping
+      - Question text (KT4) → real MRL divergence computation
+      - Scale: 131M interactions, 784K students
+
+    Download:
+      wget https://github.com/riiid/ednet/raw/master/data/KT1/EdNet-KT1.zip
+      unzip EdNet-KT1.zip -d data/raw/ednet/
+      wget https://github.com/riiid/ednet/raw/master/data/contents/questions.csv
+      cp questions.csv data/raw/ednet/
+
+    Args:
+        max_students: Cap on students to process (None = all).
+        simulate:     Use simulated data (no download required).
+        compute_mrl:  Compute real MRL from question text (needs KT4 + sentence-transformers).
+    """
+    logger.info("=" * 60)
+    logger.info("EDNET: Processing student interaction data (Axis 2 PRIMARY)...")
+    logger.info("=" * 60)
+
+    from data.pipelines.ednet_pipeline import EdNetPipeline
+
+    pipeline = EdNetPipeline(
+        raw_dir=str(RAW_DIR / "ednet"),
+        processed_dir=str(PROCESSED_DIR),
+        kt_subset="KT1",
+    )
+
+    if simulate:
+        pipeline._create_simulated_questions()
+        interactions = pipeline._create_simulated_interactions(
+            max_students=max_students or 200,
+            min_interactions=10,
+        )
+        pipeline._save(interactions)
+        logger.info("✓ EdNet: simulated data saved (use --ednet-real for real data)")
+        return True
+
+    ok = pipeline.process(
+        max_students=max_students,
+        min_interactions=10,
+        compute_mrl=compute_mrl,
+    )
+
+    if ok:
+        stats_path = PROCESSED_DIR / "ednet" / "stats.json"
+        if stats_path.exists():
+            with open(stats_path) as f:
+                stats = json.load(f)
+            logger.info(
+                f"✓ EdNet: {stats['n_students']} students, "
+                f"{stats['n_interactions']} interactions, "
+                f"MRL coverage={stats['mrl_coverage']:.1%}"
+            )
+    else:
+        logger.warning("  EdNet real data not found. Using simulated fallback.")
+        pipeline._create_simulated_questions()
+        interactions = pipeline._create_simulated_interactions(
+            max_students=max_students or 200,
+        )
+        pipeline._save(interactions)
+
+    return True
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 5. Junyi Academy  — supplementary temporal interactions
+# ═════════════════════════════════════════════════════════════════════════════
+
 def prepare_junyi():
     """Set up Junyi Academy data (requires Kaggle CLI or manual download)."""
     logger.info("=" * 60)
-    logger.info("JUNYI ACADEMY: Setting up student interaction data...")
+    logger.info("JUNYI: Setting up Junyi Academy data...")
     logger.info("=" * 60)
 
-    junyi_raw = RAW_DIR / "junyi"
     junyi_out = PROCESSED_DIR / "junyi"
-    junyi_raw.mkdir(parents=True, exist_ok=True)
     junyi_out.mkdir(parents=True, exist_ok=True)
 
-    # Check if data already exists
-    if (junyi_raw / "Log_Problem.csv").exists():
-        logger.info("  Junyi data already downloaded, processing...")
-        from models.junyi_processor import JunyiProcessor
-        proc = JunyiProcessor(str(junyi_raw), max_students=5000)
-        proc.save_processed(str(PROCESSED_DIR))
+    concepts_path = junyi_out / "concepts.json"
+    if concepts_path.exists():
+        logger.info("  Junyi already processed")
         return True
 
-    # Try Kaggle CLI
-    kaggle_dataset = "junyiacademy/junyi-academy-online-learning-activity-dataset"
-    try:
-        result = subprocess.run(
-            ["kaggle", "datasets", "download", "-d", kaggle_dataset,
-             "-p", str(junyi_raw), "--unzip"],
-            capture_output=True, text=True, timeout=300
-        )
-        if result.returncode == 0:
-            logger.info("  Downloaded via Kaggle CLI")
-            from models.junyi_processor import JunyiProcessor
-            proc = JunyiProcessor(str(junyi_raw), max_students=5000)
-            proc.save_processed(str(PROCESSED_DIR))
-            return True
-        else:
-            logger.info(f"  Kaggle download failed: {result.stderr[:200]}")
-    except FileNotFoundError:
-        logger.info("  Kaggle CLI not found")
-    except Exception as e:
-        logger.info(f"  Kaggle download error: {e}")
-
-    # Create simulated Junyi data
+    logger.info("  Junyi requires manual download from Kaggle.")
     logger.info("  Creating simulated Junyi data for testing...")
     _create_simulated_junyi(junyi_out)
     return True
 
 
 def _create_simulated_junyi(junyi_out: Path):
-    """Create simulated Junyi-like data for testing."""
+    """Create simulated Junyi data."""
     import numpy as np
-    from datetime import datetime, timedelta
+    rng = np.random.RandomState(99)
 
-    rng = np.random.RandomState(42)
-
-    # Math topics with prerequisite structure
-    topics = [
-        ("addition", 0), ("subtraction", 0), ("multiplication", 0),
-        ("division", 0), ("fractions", 1), ("decimals", 1),
-        ("ratios", 1), ("percentages", 1), ("linear_equations", 2),
-        ("inequalities", 2), ("coordinate_geometry", 2),
-        ("quadratic_equations", 2),
-    ]
-
+    subjects = ["algebra", "geometry", "arithmetic", "statistics", "trigonometry"]
     concepts = []
-    for i, (name, depth) in enumerate(topics):
-        concepts.append({
-            "concept_id": f"junyi_sim_{name}",
-            "name": name.replace("_", " ").title(),
-            "description": f"Junyi Academy topic: {name.replace('_', ' ')}",
-            "depth_level": depth,
-            "chapter_order": i * 10,
-            "subject": "math",
-            "tags": ["junyi", "simulated"],
-        })
+    for s_idx, subject in enumerate(subjects):
+        for c_idx in range(10):
+            name = f"{subject}_concept_{c_idx}"
+            concepts.append({
+                "concept_id":    f"junyi_{s_idx}_{c_idx:02d}",
+                "name":          name,
+                "subject":       subject,
+                "depth_level":   c_idx % 3,
+                "chapter_order": s_idx * 100 + c_idx,
+            })
 
     with open(junyi_out / "concepts.json", "w") as f:
         json.dump(concepts, f, indent=2)
 
-    # Simulate temporal interactions
-    n_students = 500
-    base_dt = datetime(2018, 8, 1)
-    temporal_data = {
-        "n_students": n_students,
-        "n_interactions": 0,
-        "retention_within_1d": 0.92,
-        "retention_within_3d": 0.85,
-        "retention_within_7d": 0.73,
-        "retention_within_14d": 0.58,
-        "retention_within_30d": 0.42,
-        "median_gap_days": 2.3,
-        "mean_gap_days": 5.1,
-    }
-
-    total_ints = 0
-    for s in range(n_students):
-        n = rng.randint(30, 150)
-        total_ints += n
-    temporal_data["n_interactions"] = total_ints
+    interactions = []
+    for student in range(100):
+        for _ in range(rng.randint(10, 50)):
+            concept = rng.choice(concepts)
+            interactions.append({
+                "user_id":    f"junyi_student_{student}",
+                "concept_id": concept["concept_id"],
+                "correct":    int(rng.random() > 0.4),
+                "timestamp":  int(1_600_000_000 + rng.randint(0, 10_000_000)),
+            })
 
     with open(junyi_out / "interactions_summary.json", "w") as f:
-        json.dump({"n_students": n_students, "n_interactions": total_ints}, f, indent=2)
+        json.dump(interactions, f)
 
-    with open(junyi_out / "temporal_stats.json", "w") as f:
-        json.dump(temporal_data, f, indent=2)
+    logger.info(f"  ✓ Simulated Junyi: {len(concepts)} concepts, "
+                f"{len(interactions)} interactions")
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 6. MOOCCube  — End-to-end retrieval evaluation (Axis 3)
+# ═════════════════════════════════════════════════════════════════════════════
+
+def prepare_mooccube():
+    """
+    Set up MOOCCube dataset (Axis 3: end-to-end retrieval evaluation).
+
+    MOOCCube is the ONLY dataset that provides both a prereq graph AND
+    student logs in the same domain — enabling end-to-end evaluation where
+    retrieval quality is measured against real held-out student outcomes.
+
+    Download: https://github.com/THU-KEG/MOOCCube
+    """
+    logger.info("=" * 60)
+    logger.info("MOOCCUBE: Setting up dataset (Axis 3: end-to-end evaluation)...")
+    logger.info("=" * 60)
+
+    mc_raw = RAW_DIR / "mooccube"
+    mc_out = PROCESSED_DIR / "mooccube"
+    mc_out.mkdir(parents=True, exist_ok=True)
+
+    if (mc_out / "concepts.json").exists():
+        logger.info("  MOOCCube already processed")
+        return True
+
+    # Check for real data
+    if (mc_raw / "entities" / "concepts.json").exists():
+        logger.info("  Real MOOCCube data found — processing...")
+        return _process_real_mooccube(mc_raw, mc_out)
+    else:
+        logger.info("  MOOCCube not downloaded. Creating simulated data.")
+        logger.info("  For real data: https://github.com/THU-KEG/MOOCCube")
+        _create_simulated_mooccube(mc_out)
+        return True
+
+
+def _process_real_mooccube(mc_raw: Path, mc_out: Path) -> bool:
+    """Process real MOOCCube data if available."""
+    try:
+        with open(mc_raw / "entities" / "concepts.json") as f:
+            raw_concepts = json.load(f)
+
+        concepts = []
+        for c in raw_concepts:
+            concepts.append({
+                "concept_id":    f"mc_{c['concept_id']}",
+                "name":          c.get("name", c["concept_id"]),
+                "description":   c.get("description", ""),
+                "depth_level":   1,
+                "chapter_order": 0,
+                "subject":       "mooc",
+                "dataset":       "mooccube",
+            })
+
+        with open(mc_out / "concepts.json", "w") as f:
+            json.dump(concepts, f, indent=2)
+
+        # Process prereq edges
+        edges = []
+        relations_dir = mc_raw / "relations" / "concept-concept"
+        if relations_dir.exists():
+            for rel_file in relations_dir.glob("*.json"):
+                with open(rel_file) as f:
+                    for line in f:
+                        if not line.strip():
+                            continue
+                        try:
+                            rel = json.loads(line)
+                            edges.append({
+                                "source_id":  f"mc_{rel['source']}",
+                                "target_id":  f"mc_{rel['target']}",
+                                "confidence": float(rel.get("score", 0.7)),
+                                "source":     "mooccube_human",
+                            })
+                        except (json.JSONDecodeError, KeyError):
+                            continue
+
+        with open(mc_out / "edges.json", "w") as f:
+            json.dump(edges, f, indent=2)
+
+        logger.info(
+            f"✓ MOOCCube: {len(concepts)} concepts, {len(edges)} prereq edges"
+        )
+        return True
+
+    except Exception as e:
+        logger.error(f"  MOOCCube processing error: {e}")
+        _create_simulated_mooccube(mc_out)
+        return True
+
+
+def _create_simulated_mooccube(mc_out: Path):
+    """Create simulated MOOCCube data with realistic structure."""
+    import numpy as np
+    rng = np.random.RandomState(77)
+
+    courses = [
+        ("intro_programming",  ["variables", "loops", "functions", "classes"]),
+        ("data_structures",    ["arrays", "linked_lists", "trees", "graphs"]),
+        ("machine_learning",   ["linear_regression", "gradient_descent",
+                                "neural_networks", "backpropagation"]),
+        ("calculus",           ["limits", "derivatives", "integrals", "series"]),
+        ("statistics",         ["probability", "distributions", "hypothesis_testing",
+                                "regression"]),
+    ]
+
+    concepts = []
+    edges    = []
+    chapter  = 0
+
+    for course_name, topics in courses:
+        prev_cid = None
+        for t_idx, topic in enumerate(topics):
+            cid = f"mc_{course_name}_{topic}"
+            concepts.append({
+                "concept_id":    cid,
+                "name":          topic.replace("_", " ").title(),
+                "description":   f"Concept: {topic} in {course_name}",
+                "depth_level":   t_idx % 3,
+                "chapter_order": chapter,
+                "subject":       course_name,
+                "dataset":       "mooccube",
+            })
+            if prev_cid:
+                edges.append({
+                    "source_id":  prev_cid,
+                    "target_id":  cid,
+                    "confidence": 0.85,
+                    "source":     "mooccube_simulated",
+                })
+            prev_cid = cid
+            chapter += 10
+
+    with open(mc_out / "concepts.json", "w") as f:
+        json.dump(concepts, f, indent=2)
+    with open(mc_out / "edges.json", "w") as f:
+        json.dump(edges, f, indent=2)
+
+    # Simulated student logs (watch_ratio as engagement proxy)
+    interactions = []
+    student_ids = [f"mc_student_{i}" for i in range(150)]
+    ts_base = 1_600_000_000
+
+    for sid in student_ids:
+        ability = rng.uniform(0.4, 0.95)
+        for _ in range(rng.randint(10, 60)):
+            concept = rng.choice(concepts)
+            watch_ratio = float(np.clip(
+                rng.normal(ability, 0.15), 0.0, 1.0
+            ))
+            interactions.append({
+                "user_id":        sid,
+                "concept_id":     concept["concept_id"],
+                "watch_ratio":    round(watch_ratio, 3),
+                "correct":        int(watch_ratio > 0.8),
+                "timestamp":      int(ts_base + rng.randint(0, 5_000_000)),
+                "mrl_divergence": round(float(rng.beta(2, 5)) * (1 - watch_ratio) * 0.3, 4),
+            })
+
+    with open(mc_out / "student_logs.json", "w") as f:
+        json.dump(interactions, f)
 
     logger.info(
-        f"  ✓ Simulated Junyi: {len(concepts)} concepts, "
-        f"{n_students} students, {total_ints} interactions"
+        f"  ✓ Simulated MOOCCube: {len(concepts)} concepts, "
+        f"{len(edges)} prereq edges, {len(interactions)} student interactions"
     )
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 5. MOOCCube (simulated fallback)
+# Master preparation function
 # ═════════════════════════════════════════════════════════════════════════════
-def prepare_mooccube():
-    """Set up MOOCCube data (uses simulated fallback)."""
-    logger.info("=" * 60)
-    logger.info("MOOCCUBE: Setting up prerequisite graph data...")
-    logger.info("=" * 60)
 
-    mc_out = PROCESSED_DIR / "mooccube"
-    mc_out.mkdir(parents=True, exist_ok=True)
+def prepare_all(
+    mode: str = "quick",
+    only: Optional[str] = None,
+    ednet_simulate: bool = False,
+    inject_mrl: bool = False,
+) -> Dict[str, bool]:
+    """
+    Prepare all datasets for the three evaluation axes.
 
-    from data.pipelines.prereq_graph_pipeline import MOOCCubeLoader
-
-    loader = MOOCCubeLoader(str(RAW_DIR / "mooccube"))
-    concepts = loader.load_concepts()
-    edges = loader.load_edges()
-
-    # Save concepts
-    with open(mc_out / "concepts.json", "w") as f:
-        json.dump([{
-            "concept_id": c.concept_id,
-            "name": c.name,
-            "description": c.description,
-            "depth_level": c.depth_level,
-            "chapter_order": c.chapter_order,
-            "subject": c.subject,
-            "tags": getattr(c, "tags", []),
-        } for c in concepts], f, indent=2)
-
-    # Save edges
-    with open(mc_out / "prereq_edges.json", "w") as f:
-        json.dump([e.to_dict() for e in edges], f, indent=2)
-
-    logger.info(f"✓ MOOCCube: {len(concepts)} concepts, {len(edges)} edges")
-    return True
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# Orchestrator
-# ═════════════════════════════════════════════════════════════════════════════
-def prepare_all(mode: str = "quick", only: Optional[str] = None):
-    """Run all data preparation steps."""
+    Evaluation axis mapping:
+      Axis 1 (Prereq Graph):      openstax + lecturebank
+      Axis 2 (KT/Forgetting):     ednet (primary) + assistments (fallback)
+      Axis 3 (End-to-End):        mooccube
+    """
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -531,40 +886,62 @@ def prepare_all(mode: str = "quick", only: Optional[str] = None):
     if only:
         targets = [only]
     else:
-        targets = ["openstax", "lecturebank", "assistments", "junyi", "mooccube"]
+        # All datasets in recommended order
+        targets = ["openstax", "lecturebank", "ednet", "assistments", "junyi", "mooccube"]
 
     for target in targets:
         if target == "openstax":
-            max_ch = 5 if mode == "quick" else None
-            results["openstax"] = prepare_openstax(max_chapters=max_ch)
+            max_ch       = 5 if mode == "quick" else None
+            multi_subj   = (mode == "full")
+            results["openstax"] = prepare_openstax(
+                max_chapters=max_ch, multi_subject=multi_subj
+            )
         elif target == "lecturebank":
             results["lecturebank"] = prepare_lecturebank()
+        elif target == "ednet":
+            max_s = 200 if mode == "quick" else None
+            results["ednet"] = prepare_ednet(
+                max_students=max_s,
+                simulate=ednet_simulate,
+                compute_mrl=False,   # Requires KT4 + sentence-transformers; opt-in
+            )
         elif target == "assistments":
             max_r = 50000 if mode == "quick" else None
-            results["assistments"] = prepare_assistments(max_rows=max_r)
+            results["assistments"] = prepare_assistments(
+                max_rows=max_r,
+                inject_mrl=inject_mrl,
+            )
         elif target == "junyi":
             results["junyi"] = prepare_junyi()
         elif target == "mooccube":
             results["mooccube"] = prepare_mooccube()
 
     # Print summary
-    print("\n" + "=" * 60)
-    print("DATA PREPARATION SUMMARY")
-    print("=" * 60)
+    print("\n" + "=" * 65)
+    print("DATA PREPARATION SUMMARY — PLEDGE-KARMA THREE-AXIS EVALUATION")
+    print("=" * 65)
     for name, success in results.items():
         status = "✓" if success else "✗"
         print(f"  {status} {name}")
 
-    # Show what's available
+    print("\n  Evaluation Axis → Dataset Mapping:")
+    print("  Axis 1 (Prereq Graph):   OpenStax (multi-subject) + LectureBank")
+    print("  Axis 2 (KT/Forgetting):  EdNet [primary] + ASSISTments [fallback]")
+    print("  Axis 3 (End-to-End):     MOOCCube")
+
     from data.data_loader import DataLoader
-    loader = DataLoader(str(PROCESSED_DIR))
+    loader    = DataLoader(str(PROCESSED_DIR))
     available = loader.get_available_datasets()
-    print(f"\nAvailable datasets: {available}")
-    print(f"Data directory: {PROCESSED_DIR.absolute()}")
-    print("=" * 60)
+    print(f"\n  Available datasets: {available}")
+    print(f"  Data directory:     {PROCESSED_DIR.absolute()}")
+    print("=" * 65)
 
     return results
 
+
+# ═════════════════════════════════════════════════════════════════════════════
+# CLI
+# ═════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     logging.basicConfig(
@@ -573,25 +950,41 @@ if __name__ == "__main__":
     )
 
     parser = argparse.ArgumentParser(
-        description="PLEDGE-KARMA Data Preparation"
+        description="PLEDGE-KARMA Data Preparation (Three-Axis Strategy)"
     )
     parser.add_argument(
         "--mode", choices=["quick", "full"], default="quick",
-        help="quick: first 5 chapters + 50K rows; full: everything"
+        help="quick: physics only + 50K rows; full: multi-subject + all data"
     )
     parser.add_argument(
-        "--only", choices=["openstax", "lecturebank", "assistments",
-                           "junyi", "mooccube"],
+        "--only",
+        choices=["openstax", "lecturebank", "assistments", "ednet",
+                 "junyi", "mooccube"],
         help="Process only this dataset"
+    )
+    parser.add_argument(
+        "--ednet-simulate", action="store_true",
+        help="Use simulated EdNet data (no download required)"
+    )
+    parser.add_argument(
+        "--inject-mrl", action="store_true",
+        help="Inject real MRL divergence into ASSISTments via ConceptAligner "
+             "(Strategy C; requires sentence-transformers)"
     )
     args = parser.parse_args()
 
-    # Install requests if needed (for ASSISTments download)
     try:
         import requests
     except ImportError:
         logger.info("Installing requests for HTTP downloads...")
-        subprocess.run([sys.executable, "-m", "pip", "install", "requests"],
-                       capture_output=True)
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "requests"],
+            capture_output=True
+        )
 
-    prepare_all(mode=args.mode, only=args.only)
+    prepare_all(
+        mode=args.mode,
+        only=args.only,
+        ednet_simulate=args.ednet_simulate,
+        inject_mrl=args.inject_mrl,
+    )

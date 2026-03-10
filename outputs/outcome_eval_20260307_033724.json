@@ -1,0 +1,23 @@
+{
+  "standard_rag": {
+    "auc": 0.5666,
+    "accuracy": 0.5785,
+    "n_samples": 911,
+    "admissibility_rate": 1.0,
+    "base_rate": 0.6147
+  },
+  "pledge_naive_kt": {
+    "auc": 0.5666,
+    "accuracy": 0.5785,
+    "n_samples": 911,
+    "admissibility_rate": 1.0,
+    "base_rate": 0.6147
+  },
+  "pledge_karma_full": {
+    "auc": 0.5666,
+    "accuracy": 0.5785,
+    "n_samples": 911,
+    "admissibility_rate": 1.0,
+    "base_rate": 0.6147
+  }
+}
